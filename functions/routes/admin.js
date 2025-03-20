@@ -238,6 +238,34 @@ router.post("/register", async (req, res) => {
   }
 });
 
+router.get("/partner-content/:partnerId", async (req, res) => {
+    try {
+      const partnerId = req.params.partnerId;
+      
+      const partnerContentDoc = await db.collection("partner_contents")
+        .doc(partnerId)
+        .get();
+      
+      if (!partnerContentDoc.exists) {
+        return res.status(404).json({
+          success: false,
+          error: "Partner content not found"
+        });
+      }
+      
+      res.status(200).json({
+        success: true,
+        partnerContent: partnerContentDoc.data().partnerContent
+      });
+    } catch (error) {
+      logger.error("Error fetching partner content:", error);
+      res.status(500).json({
+        success: false,
+        error: "Server error fetching partner content"
+      });
+    }
+  });
+
 // Create a pending subscription (for testing)
 router.post("/create-pending-subscription", async (req, res) => {
   try {
