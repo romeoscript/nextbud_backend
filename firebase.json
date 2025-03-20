@@ -14,5 +14,28 @@
         "npm --prefix \"$RESOURCE_DIR\" run lint"
       ]
     }
-  ]
+  ],
+  "emulators": {
+    "functions": {
+      "port": "5002"
+    },
+    "pubsub": {
+      "port": "8085"
+    },
+    "ui": {
+      "port": "4002"
+    },
+    "hub": {
+      "port": "4402"
+    },
+    "logging": {
+      "port": "4502"
+    },
+    "eventarc": {
+      "port": "9298"
+    },
+    "tasks": {
+      "port": "9498"
+    }
+  }
 }
