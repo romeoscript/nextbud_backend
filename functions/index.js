@@ -3,10 +3,10 @@
  */
 
 const {onRequest} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const express = require("express");
 const cors = require("cors");
-
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -22,13 +22,11 @@ app.use(express.urlencoded({ extended: true }));
 // Import route modules
 const adminRoutes = require("./routes/admin");
 const partnerRoutes = require("./routes/partners");
-const subscriptionRoutes = require("./routes/subscriptions");
 
 
 // Use routes
 app.use("/admin", adminRoutes);
 app.use("/partners", partnerRoutes);
-app.use("/api/subscriptions", subscriptionRoutes);
 
 
 // Export the Express API as Firebase Functions
@@ -38,3 +36,15 @@ exports.api = onRequest({
   timeoutSeconds: 300,
   memory: '1GB',
 }, app);
+
+// Import the pending activations check function
+const { checkPendingActivations } = require('./pending-activations-cron');
+
+// Export the scheduled function to check for pending activations
+exports.checkPendingActivationsScheduled = onSchedule({
+  schedule: "every 1 hours",
+  timeoutSeconds: 300,
+  memory: '512MiB',
+  retryCount: 3,
+  region: 'us-central1' // Specify your preferred region
+}, checkPendingActivations);

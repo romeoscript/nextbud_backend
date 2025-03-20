@@ -12,6 +12,7 @@ const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const {v4: uuidv4} = require("uuid");
+const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 
 // Make sure Firebase Admin is properly initialized before accessing Firestore
@@ -586,10 +587,14 @@ router.post("/process-pending-subscriptions", async (req, res) => {
     }
   });
   
-  /**
-   * Helper function to send subscription-related emails
-   */
+ 
   async function sendSubscriptionEmail(email, partnerId, action, data) {
+    // Only send email for approved subscriptions
+    if (action !== 'approve') {
+      logger.info(`Skipping email for declined subscription for ${email}`);
+      return;
+    }
+    
     // Get partner info for email
     const partnerDoc = await db.collection("partners").doc(partnerId).get();
     if (!partnerDoc.exists) {
@@ -599,29 +604,78 @@ router.post("/process-pending-subscriptions", async (req, res) => {
     
     const partner = partnerDoc.data();
     
-    // Log email would be sent (implement with your email provider)
-    logger.info(`Would send ${action} email to ${email} from partner ${partner.name}`);
+    // Check if user exists in users table
+    const usersSnapshot = await db.collection("users")
+      .where("email", "==", email.trim().toLowerCase())
+      .limit(1)
+      .get();
     
-    // This is where you would implement your email sending logic
-    // For example, with SendGrid:
-    /*
-    const sgMail = require('@sendgrid/mail');
-    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    const userExists = !usersSnapshot.empty;
     
-    const msg = {
+    // Create a transporter using the SMTP settings
+    const transporter = nodemailer.createTransport({
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      auth: {
+        user: '7732de001@smtp-brevo.com',
+        pass: 'vbsxdyZXEn0GzmS3'
+      }
+    });
+    
+    // Prepare email options
+    let subject, html;
+    
+    if (userExists) {
+      // Email for existing users
+      subject = `Congratulations! You've Been Rewarded with NextBud Subscription`;
+      html = `
+        <html>
+          <body>
+            <h1>Exciting News! 🎉</h1>
+            <p>Congratulations! You've been rewarded with a premium subscription to NextBud for ${data.duration} days.</p>
+            <p>This exclusive access is now active on your account. Enjoy all the premium features!</p>
+            <p>Log in to your account to start exploring your new benefits.</p>
+            <p>Visit <a href="https://nextbud-e3389.web.app/">NextBud</a> now!</p>
+            <p>Enjoy!</p>
+          </body>
+        </html>
+      `;
+    } else {
+      // Email for new users
+      subject = `Your NextBud Subscription Invitation`;
+      html = `
+        <html>
+          <body>
+            <h1>You've Got a Special Invitation! 📨</h1>
+            <p>Great news! You've been granted a ${data.duration}-day premium subscription to NextBud.</p>
+            <p>To activate your subscription:</p>
+            <ol>
+              <li>Create an account on <a href="https://nextbud-e3389.web.app/">NextBud</a></li>
+              <li>Use the email address this invitation was sent to</li>
+              <li>Your premium access will be automatically applied</li>
+            </ol>
+            <p>Don't miss out on this exclusive opportunity!</p>
+          </body>
+        </html>
+      `;
+    }
+    
+    // Prepare mail options
+    const mailOptions = {
+      from: 'support@nextbudapp.com', 
       to: email,
-      from: 'subscriptions@yourdomain.com',
-      subject: action === 'approve' ? 
-        `Your ${partner.name} Subscription is Approved` : 
-        `Your ${partner.name} Subscription Request Update`,
-      html: action === 'approve' ?
-        `<p>Your subscription has been approved for ${data.duration} days.</p>` :
-        `<p>Your subscription request has been declined.</p>`
+      subject: subject,
+      html: html
     };
     
-    await sgMail.send(msg);
-    */
+    try {
+      // Send email
+      const info = await transporter.sendMail(mailOptions);
+      logger.info(`Email sent: ${info.messageId}`);
+    } catch (error) {
+      logger.error(`Error sending email: ${error.message}`);
+      throw error;
+    }
   }
-
 
 module.exports = router;
