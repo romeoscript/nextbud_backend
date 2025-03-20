@@ -24,7 +24,7 @@ const storage = admin.storage();
 const bucket = storage.bucket();
 
 // Register Partner (Admin only)
-router.post("/partners/register", async (req, res) => {
+router.post("/register", async (req, res) => {
   try {
     // Fix for newer versions of Busboy
     const busboy = Busboy({ headers: req.headers });
@@ -238,5 +238,390 @@ router.post("/partners/register", async (req, res) => {
     });
   }
 });
+
+// Create a pending subscription (for testing)
+router.post("/create-pending-subscription", async (req, res) => {
+  try {
+    const { email, partnerId, duration, notes } = req.body;
+    
+    if (!email || !partnerId) {
+      return res.status(400).json({
+        success: false,
+        error: "Email and partnerId are required"
+      });
+    }
+    
+    // Normalize email
+    const customerEmail = email.trim().toLowerCase();
+    
+    // Check if partner exists
+    const partnerDoc = await db.collection("partners").doc(partnerId).get();
+    if (!partnerDoc.exists) {
+      return res.status(400).json({
+        success: false,
+        error: `Partner with ID ${partnerId} not found`
+      });
+    }
+    
+    // Generate subscription ID
+    const subscriptionId = `${partnerId}_${customerEmail.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}`;
+    
+    // Create subscription document
+    const subscriptionData = {
+      customerEmail,
+      partnerId,
+      status: "pending",
+      duration: duration ? parseInt(duration) : partnerDoc.data().defaultSubscriptionDuration || 90,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      notes: notes || null,
+      source: "admin_test"
+    };
+    
+    // Save to Firestore
+    await db.collection("subscriptions").doc(subscriptionId).set(subscriptionData);
+    
+    // Add to activity log
+    await db.collection("activityLogs").add({
+      partnerId,
+      subscriptionId,
+      customerEmail,
+      action: "subscription_created",
+      adminAction: true,
+      performedBy: "admin",
+      timestamp: FieldValue.serverTimestamp(),
+      notes: "Test subscription created"
+    });
+    
+    res.status(201).json({
+      success: true,
+      message: "Pending subscription created successfully",
+      subscription: {
+        id: subscriptionId,
+        ...subscriptionData
+      }
+    });
+    
+  } catch (error) {
+    logger.error(`Error creating pending subscription: ${error.message}`, error);
+    res.status(500).json({
+      success: false,
+      error: `Server error: ${error.message}`
+    });
+  }
+});
+
+router.post("/process-pending-subscriptions", async (req, res) => {
+    try {
+      logger.info(`Admin processing pending subscriptions`);
+      
+      // Validate request body
+      const { subscriptions } = req.body;
+      
+      if (!subscriptions || !Array.isArray(subscriptions) || subscriptions.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Request must include an array of subscriptions to process"
+        });
+      }
+      
+      // Validate each subscription in the array
+      for (const sub of subscriptions) {
+        if (!sub.email || !sub.action || !["approve", "decline"].includes(sub.action)) {
+          return res.status(400).json({
+            success: false,
+            error: "Each subscription must have an 'email' and an 'action' of either 'approve' or 'decline'"
+          });
+        }
+        
+        // If approving, duration should be a positive number if provided
+        if (sub.action === "approve" && sub.duration !== undefined) {
+          const duration = parseInt(sub.duration);
+          if (isNaN(duration) || duration <= 0) {
+            return res.status(400).json({
+              success: false,
+              error: "Duration must be a positive number"
+            });
+          }
+        }
+      }
+      
+      const results = {
+        processed: 0,
+        approved: 0,
+        declined: 0,
+        userUpdated: 0,
+        pendingActivation: 0,  // Track pending activations
+        errors: [],
+        subscriptions: []
+      };
+      
+      // Process each subscription
+      const batch = db.batch();
+      const now = new Date();
+      
+      for (const sub of subscriptions) {
+        try {
+          // Normalize email
+          const email = sub.email.trim().toLowerCase();
+          
+          // Find pending subscription for this email
+          const pendingSubscriptionsSnapshot = await db.collection("subscriptions")
+            .where("customerEmail", "==", email)
+            .where("status", "==", "pending")
+            .get();
+          
+          if (pendingSubscriptionsSnapshot.empty) {
+            results.errors.push({
+              email,
+              error: "No pending subscription found for this email"
+            });
+            continue;
+          }
+          
+          // Check if user exists in users table
+          const usersSnapshot = await db.collection("users")
+            .where("email", "==", email)
+            .limit(1)
+            .get();
+          
+          let userExists = !usersSnapshot.empty;
+          let userId = null;
+          
+          if (userExists) {
+            userId = usersSnapshot.docs[0].id;
+            logger.info(`Found user with ID ${userId} for email ${email}`);
+          } else {
+            logger.info(`No user found for email ${email}`);
+          }
+          
+          // Process all pending subscriptions for this email
+          for (const doc of pendingSubscriptionsSnapshot.docs) {
+            const subscriptionData = doc.data();
+            const subscriptionId = doc.id;
+            const partnerId = subscriptionData.partnerId;
+            
+            // Get partner data for default duration
+            const partnerDoc = await db.collection("partners").doc(partnerId).get();
+            if (!partnerDoc.exists) {
+              results.errors.push({
+                email,
+                error: `Partner ${partnerId} not found`
+              });
+              continue;
+            }
+            const partnerData = partnerDoc.data();
+            
+            // Process based on action
+            if (sub.action === "approve") {
+              // Use provided duration or default
+              const duration = sub.duration !== undefined ? 
+                parseInt(sub.duration) : 
+                (subscriptionData.duration || partnerData.defaultSubscriptionDuration || 90);
+              
+              const endDate = new Date();
+              endDate.setDate(now.getDate() + duration);
+              
+              // Update subscription to active
+              batch.update(doc.ref, {
+                status: "active",
+                startDate: now,
+                endDate: endDate,
+                duration: duration, // Store the final duration used
+                updatedAt: FieldValue.serverTimestamp(),
+                approvedAt: FieldValue.serverTimestamp(),
+                approvedBy: req.admin?.email || "admin",
+                notes: sub.notes || subscriptionData.notes || null,
+                userUpdated: userExists
+              });
+              
+              // If user exists, update their premium status
+              if (userExists) {
+                const userRef = db.collection("users").doc(userId);
+                batch.update(userRef, {
+                  premium_user: true,
+                  mart_premium_user: true,
+                  premiumUpdatedAt: FieldValue.serverTimestamp(),
+                  premiumExpiryDate: endDate,
+                  premiumSource: `partner_${partnerId}`,
+                  updatedAt: FieldValue.serverTimestamp()
+                });
+                results.userUpdated++;
+              } else {
+                // User doesn't exist yet - store in pending_activations
+                const pendingActivationId = `${email.replace(/[^a-z0-9]/g, '_')}_${Date.now()}`;
+                const pendingActivationRef = db.collection("pending_activations").doc(pendingActivationId);
+                
+                batch.set(pendingActivationRef, {
+                  email: email,
+                  partnerId: partnerId,
+                  subscriptionId: subscriptionId,
+                  duration: duration,
+                  approvedAt: now,
+                  expiresAt: endDate,
+                  activationStatus: "waiting_for_user",
+                  createdAt: FieldValue.serverTimestamp(),
+                  updatedAt: FieldValue.serverTimestamp(),
+                  notes: sub.notes || null,
+                  checkCount: 0,
+                  lastChecked: null
+                });
+                
+                results.pendingActivation++;
+              }
+              
+              results.approved++;
+              results.subscriptions.push({
+                id: subscriptionId,
+                email,
+                partnerId,
+                action: "approve",
+                duration,
+                startDate: now,
+                endDate,
+                userUpdated: userExists,
+                pendingActivation: !userExists
+              });
+              
+              // Add to activity log
+              const logRef = db.collection("activityLogs").doc();
+              batch.set(logRef, {
+                partnerId,
+                subscriptionId,
+                customerEmail: email,
+                userId: userExists ? userId : null,
+                action: "subscription_approved",
+                performedBy: req.admin?.email || "admin",
+                adminAction: true,
+                timestamp: FieldValue.serverTimestamp(),
+                notes: sub.notes || null,
+                userUpdated: userExists,
+                pendingActivation: !userExists
+              });
+              
+              // Update partner total subscriptions
+              const partnerRef = db.collection("partners").doc(partnerId);
+              batch.update(partnerRef, {
+                totalSubscriptions: FieldValue.increment(1),
+                lastActivityDate: FieldValue.serverTimestamp()
+              });
+              
+            } else if (sub.action === "decline") {
+              // Update subscription to declined
+              batch.update(doc.ref, {
+                status: "declined",
+                updatedAt: FieldValue.serverTimestamp(),
+                declinedAt: FieldValue.serverTimestamp(),
+                declinedBy: req.admin?.email || "admin",
+                notes: sub.notes || subscriptionData.notes || null
+              });
+              
+              results.declined++;
+              results.subscriptions.push({
+                id: subscriptionId,
+                email,
+                partnerId,
+                action: "decline",
+                reason: sub.notes || null,
+                userExists
+              });
+              
+              // Add to activity log
+              const logRef = db.collection("activityLogs").doc();
+              batch.set(logRef, {
+                partnerId,
+                subscriptionId,
+                customerEmail: email,
+                userId: userExists ? userId : null,
+                action: "subscription_declined",
+                performedBy: req.admin?.email || "admin",
+                adminAction: true,
+                timestamp: FieldValue.serverTimestamp(),
+                notes: sub.notes || null
+              });
+            }
+            
+            results.processed++;
+          }
+          
+        } catch (error) {
+          logger.error(`Error processing subscription for email ${sub.email}: ${error.message}`, error);
+          results.errors.push({
+            email: sub.email,
+            error: error.message
+          });
+        }
+      }
+      
+      // Commit the batch if there's at least one change
+      if (results.processed > 0) {
+        await batch.commit();
+        logger.info(`Processed ${results.processed} subscriptions (${results.approved} approved, ${results.declined} declined, ${results.userUpdated} users updated, ${results.pendingActivation} pending activations)`);
+        
+        // Optionally send emails (would be implemented with your email service)
+        try {
+          // Send emails to users
+          for (const sub of results.subscriptions) {
+            // You would implement this with your email service
+            await sendSubscriptionEmail(sub.email, sub.partnerId, sub.action, sub);
+          }
+        } catch (emailError) {
+          logger.error(`Error sending notification emails: ${emailError.message}`, emailError);
+          // Continue even if emails fail
+        }
+      }
+      
+      // Return results
+      res.status(200).json({
+        success: true,
+        results
+      });
+      
+    } catch (error) {
+      logger.error(`Error processing pending subscriptions: ${error.message}`, error);
+      res.status(500).json({
+        success: false,
+        error: `Server error: ${error.message}`
+      });
+    }
+  });
+  
+  /**
+   * Helper function to send subscription-related emails
+   */
+  async function sendSubscriptionEmail(email, partnerId, action, data) {
+    // Get partner info for email
+    const partnerDoc = await db.collection("partners").doc(partnerId).get();
+    if (!partnerDoc.exists) {
+      logger.error(`Cannot send email: Partner ${partnerId} not found`);
+      return;
+    }
+    
+    const partner = partnerDoc.data();
+    
+    // Log email would be sent (implement with your email provider)
+    logger.info(`Would send ${action} email to ${email} from partner ${partner.name}`);
+    
+    // This is where you would implement your email sending logic
+    // For example, with SendGrid:
+    /*
+    const sgMail = require('@sendgrid/mail');
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    
+    const msg = {
+      to: email,
+      from: 'subscriptions@yourdomain.com',
+      subject: action === 'approve' ? 
+        `Your ${partner.name} Subscription is Approved` : 
+        `Your ${partner.name} Subscription Request Update`,
+      html: action === 'approve' ?
+        `<p>Your subscription has been approved for ${data.duration} days.</p>` :
+        `<p>Your subscription request has been declined.</p>`
+    };
+    
+    await sgMail.send(msg);
+    */
+  }
+
 
 module.exports = router;

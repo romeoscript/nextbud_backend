@@ -6,6 +6,7 @@ const express = require("express");
 const router = express.Router();
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const { FieldValue } = require('firebase-admin/firestore');
 const Busboy = require("busboy");
 const path = require("path");
 const os = require("os");
@@ -13,6 +14,11 @@ const fs = require("fs");
 const Papa = require("papaparse");
 
 const { authenticatePartner, isValidEmail } = require("../middleware/auth");
+
+// Make sure Firebase Admin is properly initialized before accessing Firestore
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 const db = admin.firestore();
 
@@ -22,13 +28,17 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
 
   try {
     // Create a Busboy instance to parse form data
-    const busboy = new Busboy({headers: req.headers});
+    const busboy = Busboy({ headers: req.headers });
     const tmpdir = os.tmpdir();
     const uploads = {};
     const fileWrites = [];
 
     // Handle file upload
-    busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
+    busboy.on("file", (fieldname, file, fileInfo) => {
+      // In newer Busboy versions, the file metadata is in a fileInfo object
+      const filename = fileInfo ? fileInfo.filename : '';
+      const mimetype = fileInfo ? fileInfo.mimeType : '';
+      
       if (fieldname !== "csvFile") {
         logger.warn(`Invalid field name, expected "csvFile" but got: ${fieldname}`);
         res.status(400).json({ 
@@ -157,7 +167,7 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
                     status: status,
                     startDate: startDate,
                     endDate: endDate,
-                    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                    createdAt: FieldValue.serverTimestamp(),
                     source: "csv_import",
                   });
                   
@@ -188,8 +198,8 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
                 
                 // Update partner analytics
                 await db.collection("partners").doc(req.partnerSlug).update({
-                  totalSubscriptions: admin.firestore.FieldValue.increment(results.successCount),
-                  lastImportDate: admin.firestore.FieldValue.serverTimestamp(),
+                  totalSubscriptions: FieldValue.increment(results.successCount),
+                  lastImportDate: FieldValue.serverTimestamp(),
                 });
               }
               
@@ -201,7 +211,7 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
                 successCount: results.successCount,
                 errorCount: results.errorCount,
                 errors: results.errors.slice(0, 20), // Limit the number of errors stored
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                createdAt: FieldValue.serverTimestamp(),
               });
               
               // Clean up temporary files

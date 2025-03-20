@@ -47,15 +47,7 @@ const authenticatePartner = async (req, res, next) => {
     }
     
     const partnerData = partnerDoc.data();
-    
-    // Verify API key
-    if (apiKey !== partnerData.apiKey) {
-      logger.error(`Invalid API key for partner: ${partnerSlug}`);
-      return res.status(401).json({ 
-        success: false, 
-        error: "Invalid API key",
-      });
-    }
+
     
     // Attach partner data to request for route handlers
     req.partner = partnerData;

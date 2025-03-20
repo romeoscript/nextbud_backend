@@ -24,10 +24,12 @@ const adminRoutes = require("./routes/admin");
 const partnerRoutes = require("./routes/partners");
 const subscriptionRoutes = require("./routes/subscriptions");
 
+
 // Use routes
 app.use("/admin", adminRoutes);
-app.use("/api/partners", partnerRoutes);
+app.use("/partners", partnerRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+
 
 // Export the Express API as Firebase Functions
 exports.api = onRequest({
