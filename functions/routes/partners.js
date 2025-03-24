@@ -7,14 +7,14 @@ const express = require("express");
 const router = express.Router();
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
-const {FieldValue} = require("firebase-admin/firestore");
+const { FieldValue } = require("firebase-admin/firestore");
 const Busboy = require("busboy");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
 const Papa = require("papaparse");
 
-const {authenticatePartner, isValidEmail} = require("../middleware/auth");
+const { authenticatePartner, isValidEmail } = require("../middleware/auth");
 
 // Make sure Firebase Admin is properly initialized before accessing Firestore
 if (!admin.apps.length) {
@@ -30,7 +30,7 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
   try {
     // Create a Busboy instance to parse form data
 
-    const busboy = Busboy({headers: req.headers});
+    const busboy = Busboy({ headers: req.headers });
     const tmpdir = os.tmpdir();
     const uploads = {};
     const fileWrites = [];
@@ -196,9 +196,14 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
                 // Commit batch write
                 await batch.commit();
                 logger.info(`Successfully processed ${results.successCount} subscriptions`);
+                const partnersRef = db.collection("partners");
+                const querySnapshot = await partnersRef.where("slug", "==", req.partnerSlug).get();
+
 
                 // Update partner analytics
-                await db.collection("partners").doc(req.partnerSlug).update({
+                const partnerDoc = querySnapshot.docs[0];
+
+                await partnerDoc.ref.update({
                   totalSubscriptions: FieldValue.increment(results.successCount),
                   lastImportDate: FieldValue.serverTimestamp(),
                 });
@@ -211,7 +216,7 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
                 totalProcessed: results.totalProcessed,
                 successCount: results.successCount,
                 errorCount: results.errorCount,
-                errors: results.errors.slice(0, 20), // Limit the number of errors stored
+                errors: results.errors.slice(0, 20), 
                 createdAt: FieldValue.serverTimestamp(),
               });
 
@@ -279,8 +284,8 @@ router.post("/:partnerSlug/process-csv", authenticatePartner, async (req, res) =
 router.get("/", async (req, res) => {
   try {
     const partnersSnapshot = await db.collection("partners")
-        .where("status", "==", "active")
-        .get();
+      .where("status", "==", "active")
+      .get();
 
     const partners = partnersSnapshot.docs.map((doc) => {
       const data = doc.data();
