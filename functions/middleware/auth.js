@@ -43,24 +43,27 @@ const authenticatePartner = async (req, res, next) => {
     });
   }
 
-
   try {
-    // Verify the partner exists and API key is valid
-    const partnerDoc = await db.collection("partners").doc(partnerSlug).get();
+    // Query for a partner where the slug field matches the provided partnerSlug
+    const partnersRef = db.collection("partners");
+    const querySnapshot = await partnersRef.where("slug", "==", partnerSlug).get();
 
-    if (!partnerDoc.exists) {
-      logger.error(`Partner ${partnerSlug} not found`);
+    // Check if we found a matching partner
+    if (querySnapshot.empty) {
+      logger.error(`Partner with slug ${partnerSlug} not found`);
       return res.status(404).json({
         success: false,
         error: "Partner not found",
       });
     }
 
+    // Get the first matching document
+    const partnerDoc = querySnapshot.docs[0];
     const partnerData = partnerDoc.data();
 
-
-    // Attach partner data to request for route handlers
+    // Attach partner data and ID to request for route handlers
     req.partner = partnerData;
+    req.partnerId = partnerDoc.id;
     req.partnerSlug = partnerSlug;
 
     next();

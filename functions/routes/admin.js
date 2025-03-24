@@ -246,12 +246,13 @@ router.get("/partner-content/:partnerId", async (req, res) => {
         .doc(partnerId)
         .get();
       
-      if (!partnerContentDoc.exists) {
-        return res.status(404).json({
-          success: false,
-          error: "Partner content not found"
-        });
-      }
+        if (!partnerContentDoc.exists) {
+          return res.status(200).json({
+            success: true,
+            partnerContent: null  
+          });
+        }
+    
       
       res.status(200).json({
         success: true,
@@ -265,6 +266,86 @@ router.get("/partner-content/:partnerId", async (req, res) => {
       });
     }
   });
+
+  // Add/update partner content (Admin only)
+router.post("/partner-content/:partnerId", async (req, res) => {
+  try {
+    const partnerId = req.params.partnerId;
+    const { content } = req.body;
+    
+    if (!content) {
+      return res.status(400).json({
+        success: false,
+        error: "Content is required"
+      });
+    }
+    
+    // Check if partner exists
+    const partnerDoc = await db.collection("partners").doc(partnerId).get();
+    if (!partnerDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: `Partner with ID ${partnerId} not found`
+      });
+    }
+    
+    // Update or create partner content
+    await db.collection("partner_contents").doc(partnerId).set({
+      partnerId,
+      partnerContent: content,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    
+    res.status(200).json({
+      success: true,
+      message: "Partner content updated successfully"
+    });
+  } catch (error) {
+    logger.error("Error updating partner content:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error updating partner content"
+    });
+  }
+});
+
+// Delete partner content
+router.delete("/partner-content/:partnerId", async (req, res) => {
+  try {
+    const partnerId = req.params.partnerId;
+    
+    // Check if content exists
+    const contentDoc = await db.collection("partner_contents").doc(partnerId).get();
+    if (!contentDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: `Content for partner ID ${partnerId} not found`
+      });
+    }
+    
+    // Delete the content
+    await db.collection("partner_contents").doc(partnerId).delete();
+    
+    // Log the deletion
+    await db.collection("activityLogs").add({
+      partnerId,
+      action: "partner_content_deleted",
+      adminAction: true,
+      timestamp: FieldValue.serverTimestamp()
+    });
+    
+    res.status(200).json({
+      success: true,
+      message: "Partner content deleted successfully"
+    });
+  } catch (error) {
+    logger.error("Error deleting partner content:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error deleting partner content"
+    });
+  }
+});
 
 // Create a pending subscription (for testing)
 router.post("/create-pending-subscription", async (req, res) => {
