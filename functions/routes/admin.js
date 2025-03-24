@@ -14,6 +14,7 @@ const os = require("os");
 const fs = require("fs");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
+const { authenticatePartner } = require("../middleware/auth");
 
 // Make sure Firebase Admin is properly initialized before accessing Firestore
 if (!admin.apps.length) {
@@ -268,7 +269,7 @@ router.get("/partner-content/:partnerId", async (req, res) => {
   });
 
   // Add/update partner content (Admin only)
-router.post("/partner-content/:partnerId", async (req, res) => {
+router.post("/partner-content/:partnerId", authenticatePartner, async (req, res) => {
   try {
     const partnerId = req.params.partnerId;
     const { content } = req.body;
@@ -280,14 +281,6 @@ router.post("/partner-content/:partnerId", async (req, res) => {
       });
     }
     
-    // Check if partner exists
-    const partnerDoc = await db.collection("partners").doc(partnerId).get();
-    if (!partnerDoc.exists) {
-      return res.status(404).json({
-        success: false,
-        error: `Partner with ID ${partnerId} not found`
-      });
-    }
     
     // Update or create partner content
     await db.collection("partner_contents").doc(partnerId).set({
@@ -348,7 +341,7 @@ router.delete("/partner-content/:partnerId", async (req, res) => {
 });
 
 // Create a pending subscription (for testing)
-router.post("/create-pending-subscription", async (req, res) => {
+router.post("/create-pending-subscription", authenticatePartner, async (req, res) => {
   try {
     const {email, partnerId, duration, notes} = req.body;
 
@@ -361,15 +354,6 @@ router.post("/create-pending-subscription", async (req, res) => {
 
     // Normalize email
     const customerEmail = email.trim().toLowerCase();
-
-    // Check if partner exists
-    const partnerDoc = await db.collection("partners").doc(partnerId).get();
-    if (!partnerDoc.exists) {
-      return res.status(400).json({
-        success: false,
-        error: `Partner with ID ${partnerId} not found`,
-      });
-    }
 
     // Generate subscription ID
     const subscriptionId = `${partnerId}_${customerEmail.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}`;

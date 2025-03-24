@@ -34,7 +34,7 @@ const authenticateAdmin = (req, res, next) => {
 
 // Helper middleware for partner authentication
 const authenticatePartner = async (req, res, next) => {
-  const partnerSlug = req.params.partnerSlug || req.query.partnerSlug;
+  const partnerSlug = req.params.partnerSlug || req.query.partnerSlug || req.body.partnerId;
 
   if (!partnerSlug) {
     return res.status(400).json({
