@@ -22,13 +22,13 @@ app.use(express.urlencoded({extended: true}));
 // Import route modules
 const adminRoutes = require("./routes/admin");
 const partnerRoutes = require("./routes/partners");
-const referralRoutes = require("./routes/Referral")
+const referralRoutes = require("./routes/Referral");
 
 
 // Use routes
 app.use("/admin", adminRoutes);
 app.use("/partners", partnerRoutes);
-app.use("/referrals", referralRoutes); 
+app.use("/referrals", referralRoutes);
 
 
 // Export the Express API as Firebase Functions
@@ -53,7 +53,7 @@ exports.checkPendingActivationsScheduled = onSchedule({
 }, checkPendingActivations);
 
 exports.checkExpiredSubscriptionsScheduled = onSchedule({
-  schedule: "0 0 * * *", 
+  schedule: "0 0 * * *",
   timeoutSeconds: 300,
   memory: "512MiB",
   retryCount: 3,
