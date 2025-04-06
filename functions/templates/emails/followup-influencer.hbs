@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Maximize Your Reach on YourApp</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .logo { max-width: 150px; }
+    h1 { color: #4a4a4a; }
+    .button { display: inline-block; background-color: #e74c3c; color: white; text-decoration: none; padding: 10px 20px; border-radius: 5px; margin: 15px 0; }
+    .tips { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    .stats { text-align: center; margin: 25px 0; }
+    .stat-number { font-size: 36px; font-weight: bold; color: #e74c3c; display: block; }
+    .footer { margin-top: 40px; font-size: 12px; color: #666; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="{{appUrl}}/images/creator-logo.png" alt="YourApp Creator Program" class="logo">
+  </div>
+
+  <h1>Ready to grow your audience, {{firstName}}?</h1>
+  
+  <p>It's been {{daysSinceSignup}} days since you joined our Creator Program, and we're excited to see you get started! Creators who publish within their first week typically see 3x more engagement.</p>
+  
+  <div class="stats">
+    <span class="stat-number">3X</span>
+    <span>more engagement for early creators</span>
+  </div>
+  
+  <p>Here are some tips from our top creators to help you maximize your reach:</p>
+  
+  <div class="tips">
+    <h3>Creator Success Tips:</h3>
+    <ul>
+      <li><strong>Post Consistently</strong>: Regular content keeps your audience engaged</li>
+      <li><strong>Analyze Performance</strong>: Use your analytics to see what resonates</li>
+      <li><strong>Engage With Comments</strong>: Build community by responding quickly</li>
+      <li><strong>Cross-Promote</strong>: Share your YourApp content on other platforms</li>
+    </ul>
+  </div>
+  
+  <div style="text-align: center;">
+    <a href="{{createUrl}}" class="button">Create New Content</a>
+  </div>
+  
+  <p>Remember to check your <a href="{{analyticsUrl}}">Creator Analytics</a> regularly to track your growth and understand your audience better.</p>
+  
+  <p>Need inspiration or have questions? Our Creator Support team is here to help you succeed!</p>
+  
+  <p>Creating success together,<br>The YourApp Creator Team</p>
+  
+  <div class="footer">
+    <p>© {{currentYear}} YourApp. All rights reserved.</p>
+    <p>123 App Street, San Francisco, CA 94107</p>
+    <p><small>You're receiving this email because you joined the YourApp Creator Program. If you no longer wish to receive these emails, <a href="{{appUrl}}/creator/email-preferences?email={{email}}">update your preferences</a>.</small></p>
+  </div>
+</body>
+</html>

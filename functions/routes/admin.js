@@ -302,6 +302,40 @@ router.post("/partner-content/:partnerId", async (req, res) => {
   }
 });
 
+router.get("/export/:collectionName", async (req, res) => {
+  try {
+    const { collectionName } = req.params;
+    
+    // Set default limit to 10 if not specified
+    const limit = req.query.limit ? parseInt(req.query.limit) : 10;
+    
+    // Get collection data
+    let query = db.collection(collectionName).limit(limit);
+    
+    const snapshot = await query.get();
+    const data = [];
+    
+    snapshot.forEach(doc => {
+      data.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+    
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename=${collectionName}_export.json`);
+    
+    // Send data as JSON
+    res.status(200).json(data);
+    
+  } catch (error) {
+    console.error(`Error exporting collection: ${error}`);
+    res.status(500).json({ error: "Failed to export collection", details: error.message });
+  }
+});
+
+
 // Delete partner content
 router.delete("/partner-content/:partnerId", async (req, res) => {
   try {

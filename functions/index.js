@@ -24,12 +24,12 @@ const adminRoutes = require("./routes/admin");
 const partnerRoutes = require("./routes/partners");
 const referralRoutes = require("./routes/Referral");
 
+const emailServices = require("./routes/EmailServices/onBoarding");
 
 // Use routes
 app.use("/admin", adminRoutes);
 app.use("/partners", partnerRoutes);
 app.use("/referrals", referralRoutes);
-
 
 // Export the Express API as Firebase Functions
 exports.api = onRequest({
@@ -59,3 +59,16 @@ exports.checkExpiredSubscriptionsScheduled = onSchedule({
   retryCount: 3,
   region: "us-central1", // Same region as your other function
 }, checkExpiredSubscriptions);
+
+// Export email-related functions
+exports.onNewUserCreated = emailServices.onNewUserCreated;
+exports.onNewInfluencerCreated = emailServices.onNewInfluencerCreated;
+exports.sendScheduledEmails = onSchedule({
+  schedule: "every 15 minutes",
+  timeoutSeconds: 120,
+  memory: "256MiB",
+  retryCount: 2,
+  region: "us-central1",
+}, emailServices.sendScheduledEmails);
+exports.checkEmailValidity = emailServices.checkEmailValidity;
+exports.testMailerooTemplate = emailServices.testMailerooTemplate;
