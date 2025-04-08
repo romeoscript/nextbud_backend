@@ -1,3 +1,4 @@
+/* eslint-disable */
 // chat-monitoring.js
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onCall } = require("firebase-functions/v2/https");

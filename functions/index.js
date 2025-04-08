@@ -72,7 +72,7 @@ exports.onNewInfluencerCreated = emailServices.onNewInfluencerCreated;
 // }, emailServices.sendScheduledEmails);
 
 exports.sendScheduledEmails = onSchedule({
-  schedule: "every 2 minutes",
+  schedule: "every 15 minutes",
   timeoutSeconds: 120,
   memory: "256MiB",
   retryCount: 2,
@@ -80,9 +80,7 @@ exports.sendScheduledEmails = onSchedule({
 }, emailServices.sendScheduledEmails);
 
 
-
 exports.checkEmailValidity = emailServices.checkEmailValidity;
-
 
 
 // exports.testMailerooTemplate = emailServices.testMailerooTemplate;

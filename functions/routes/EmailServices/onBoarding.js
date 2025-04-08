@@ -1,3 +1,5 @@
+/* eslint-disable */
+
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {onCall} = require('firebase-functions/v2/https');
 const functions = require('firebase-functions');
@@ -14,17 +16,11 @@ const nodemailer = require('nodemailer');
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+/* eslint-disable */
 
-// Maileroo API configuration (for email verification only)
-const MAILEROO_API_KEY = functions.config().maileroo?.api_key || '';
-const MAILEROO_VERIFY_URL = functions.config().maileroo?.verify_url || 'https://verify.maileroo.net';
-const MAILEROO_FROM_EMAIL = functions.config().maileroo?.from_email || '';
-const MAILEROO_FROM_NAME = functions.config().maileroo?.from_name || '';
 
 // SMTP Configuration
 const SMTP_HOST = 'smtp.maileroo.com';
-const SMTP_PORT = '465';
-const SMTP_SECURE = 'true';
 const SMTP_USER = 'romeo@fb66ec3261d3c0b5.maileroo.org';
 const SMTP_PASS = 'ab36b81d5adef147303ecbb0';
 const EMAIL_FROM_NAME = 'nextbud';
@@ -240,90 +236,6 @@ exports.onNewInfluencerCreated = onDocumentCreated({
 });
 
 /**
- * Check if an email address is valid using Maileroo's verification service
- * Falls back to basic validation if API fails
- */
-async function verifyEmailWithMaileroo(emailAddress) {
-  try {
-    // First try Maileroo API
-    const response = await axios.post(
-      `${MAILEROO_VERIFY_URL}/check`,
-      {
-        api_key: MAILEROO_API_KEY,
-        email_address: emailAddress
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    console.log(`Maileroo email verification response for ${emailAddress}:`, response.data);
-    
-    // Check if response contains expected data structure
-    if (response.data && response.data.status) {
-      return {
-        status: response.data.status, // 'valid', 'invalid', 'risky', etc.
-        score: response.data.score || 0,
-        reason: response.data.reason || 'No reason provided',
-        full_response: response.data
-      };
-    } else {
-      console.log(`Maileroo API returned unexpected response format for ${emailAddress}, falling back to basic validation`);
-      // Fall back to basic validation
-      return performBasicEmailValidation(emailAddress);
-    }
-  } catch (error) {
-    console.error(`Error verifying email ${emailAddress} with Maileroo:`, error.message);
-    
-    // Fall back to basic validation
-    console.log(`Falling back to basic email validation for ${emailAddress}`);
-    return performBasicEmailValidation(emailAddress);
-  }
-}
-
-/**
- * Performs basic email validation when Maileroo API is unavailable
- */
-function performBasicEmailValidation(emailAddress) {
-  // Simple regex for basic email format validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const isValidFormat = emailRegex.test(emailAddress);
-  
-  // Check for common disposable email domains (basic check)
-  const disposableDomains = [
-    'mailinator.com', 'yopmail.com', 'tempmail.com', 'guerrillamail.com',
-    'throwawaymail.com', '10minutemail.com', 'trashmail.com'
-  ];
-  
-  const emailDomain = emailAddress.split('@')[1].toLowerCase();
-  const isPotentiallyDisposable = disposableDomains.includes(emailDomain);
-  
-  let status = 'unknown';
-  let reason = 'Basic validation only';
-  
-  if (!isValidFormat) {
-    status = 'invalid';
-    reason = 'Invalid email format';
-  } else if (isPotentiallyDisposable) {
-    status = 'risky';
-    reason = 'Potentially disposable email domain';
-  } else {
-    status = 'valid';
-    reason = 'Passed basic validation';
-  }
-  
-  return {
-    status: status,
-    score: status === 'valid' ? 70 : 0, 
-    reason: reason,
-    validation_method: 'basic',
-    full_response: null
-  };
-}
-
-/**
  * Send email using SMTP with Nodemailer
  */
 async function sendEmail(toEmail, toName, subject, htmlContent, textContent) {
@@ -382,7 +294,7 @@ exports.sendScheduledEmails = async (event) => {
     
     scheduledEmailsSnapshot.forEach(doc => {
       const scheduledEmail = doc.data();
-      console.log(`Processing scheduled email: ${doc.id}, type: ${scheduledEmail.emailType}, scheduled for: ${scheduledEmail.scheduledFor.toDate()}`);
+      console.log(`Processing scheduled email: ${doc.id}, type: ${scheduledEmail.emailType}, scheduled for: ${scheduledEmail.scheduledFor.toDate ? scheduledEmail.scheduledFor.toDate() : new Date(scheduledEmail.scheduledFor)}`);
       
       // Process all email types
       if (scheduledEmail.emailType === 'followUp') {
@@ -477,9 +389,9 @@ async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
     });
     
     // Schedule follow-up email
-    // Use 2 minutes delay for testing instead of days
-    const followUpMinutes = 2; // 2 minutes delay for testing
-    await scheduleFollowUpEmail(userId, followUpMinutes, userType, true);
+    // Set the follow-up time based on user type
+    const followUpDays = userType === 'influencer' ? 3 : 7;
+    await scheduleFollowUpEmail(userId, followUpDays, userType, false);
     
     return true;
   } catch (error) {
@@ -492,29 +404,43 @@ async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
  * Schedule a follow-up email
  */
 async function scheduleFollowUpEmail(userId, timeDelay, userType, isMinutes = false) {
-  const followUpDate = new Date();
-  
-  if (isMinutes) {
-    // Add minutes for testing
-    followUpDate.setMinutes(followUpDate.getMinutes() + timeDelay);
-    console.log(`Setting follow-up for ${timeDelay} minutes from now: ${followUpDate}`);
-  } else {
-    // Normal behavior - add days
-    followUpDate.setDate(followUpDate.getDate() + timeDelay);
+  try {
+    // Create a Firestore timestamp for the scheduled time
+    let scheduledDate;
+    const now = new Date();
+    
+    if (isMinutes) {
+      // Add minutes (for testing)
+      now.setMinutes(now.getMinutes() + timeDelay);
+      scheduledDate = now;
+      console.log(`Setting follow-up for ${timeDelay} minutes from now: ${scheduledDate}`);
+    } else {
+      // Add days (for production)
+      now.setDate(now.getDate() + timeDelay);
+      scheduledDate = now;
+      console.log(`Setting follow-up for ${timeDelay} days from now: ${scheduledDate}`);
+    }
+    
+    // Convert to Firestore Timestamp
+    const scheduledTimestamp = admin.firestore.Timestamp.fromDate(scheduledDate);
+    
+    // Save to Firestore
+    await admin.firestore().collection('scheduledEmails').add({
+      userId: userId,
+      userType: userType,
+      scheduledFor: scheduledTimestamp,
+      emailType: 'followUp',
+      sent: false,
+      createdAt: FieldValue.serverTimestamp()
+    });
+    
+    const timeUnit = isMinutes ? 'minutes' : 'days';
+    console.log(`Follow-up email scheduled for ${userType} ${userId} in ${timeDelay} ${timeUnit}`);
+    return true;
+  } catch (error) {
+    console.error(`Error scheduling follow-up email: ${error.message}`);
+    return false;
   }
-  
-  await admin.firestore().collection('scheduledEmails').add({
-    userId: userId,
-    userType: userType,
-    scheduledFor: new Date(followUpDate),
-    emailType: 'followUp',
-    sent: false,
-    createdAt: FieldValue.serverTimestamp()
-  });
-  
-  const timeUnit = isMinutes ? 'minutes' : 'days';
-  console.log(`Follow-up email scheduled for ${userType} ${userId} in ${timeDelay} ${timeUnit}`);
-  return true;
 }
 
 /**
