@@ -71,4 +71,4 @@ exports.sendScheduledEmails = onSchedule({
   region: "us-central1",
 }, emailServices.sendScheduledEmails);
 exports.checkEmailValidity = emailServices.checkEmailValidity;
-exports.testMailerooTemplate = emailServices.testMailerooTemplate;
+// exports.testMailerooTemplate = emailServices.testMailerooTemplate;

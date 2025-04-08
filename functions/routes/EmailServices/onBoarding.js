@@ -1,18 +1,64 @@
 const {onDocumentCreated} = require('firebase-functions/v2/firestore');
 const {onCall} = require('firebase-functions/v2/https');
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
-const FormData = require('form-data');
+const { FieldValue } = require('firebase-admin/firestore');
 const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
+const nodemailer = require('nodemailer');
 
-// Maileroo API configuration
-const MAILEROO_API_KEY = process.env.MAILEROO_API_KEY;
-const MAILEROO_SMTP_URL = 'https://smtp.maileroo.com';
-const MAILEROO_VERIFY_URL = 'https://verify.maileroo.net';
-const MAILEROO_FROM_EMAIL = process.env.MAILEROO_FROM_EMAIL || 'noreply@yourapp.com';
-const MAILEROO_FROM_NAME = process.env.MAILEROO_FROM_NAME || 'YourApp';
+// Initialize Firebase Admin if not already done
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+
+
+
+// Maileroo API configuration (for email verification only)
+const MAILEROO_API_KEY = functions.config().maileroo?.api_key || '';
+const MAILEROO_VERIFY_URL = functions.config().maileroo?.verify_url || 'https://verify.maileroo.net';
+const MAILEROO_FROM_EMAIL = functions.config().maileroo?.from_email || '';
+const MAILEROO_FROM_NAME = functions.config().maileroo?.from_name || '';
+
+// SMTP Configuration
+// const SMTP_HOST = functions.config().smtp?.host || 'smtp.maileroo.com';
+// const SMTP_PORT = parseInt(functions.config().smtp?.port || '465');
+// const SMTP_SECURE = functions.config().smtp?.secure === 'true';
+// const SMTP_USER = functions.config().smtp?.user || '';
+// const SMTP_PASS = functions.config().smtp?.pass || '';
+// const EMAIL_FROM = functions.config().email?.from || MAILEROO_FROM_EMAIL;
+// const EMAIL_FROM_NAME = functions.config().email?.from_name || MAILEROO_FROM_NAME;
+
+const SMTP_HOST = 'smtp.maileroo.com';
+const SMTP_PORT = '465';
+const SMTP_SECURE = 'true';
+const SMTP_USER = 'romeo@fb66ec3261d3c0b5.maileroo.org';
+const SMTP_PASS = 'ab36b81d5adef147303ecbb0';
+// const EMAIL_FROM = '60ca95.7200.2a13f46f21d8abda62fed529fcef2937@g.maileroo.net';
+const EMAIL_FROM_NAME = 'nextbud';
+
+// Create SMTP transporter
+const transporter = nodemailer.createTransport({
+  host: SMTP_HOST,
+  port: 587,
+ secure: false, 
+  auth: {
+    user: SMTP_USER,
+    pass: SMTP_PASS,
+  },
+});
+
+
+// const transporter = nodemailer.createTransport({
+//   host: "smtp-relay.brevo.com",
+//   port: 587,
+//   auth: {
+//     user: "7732de001@smtp-brevo.com",
+//     pass: "vbsxdyZXEn0GzmS3",
+//   },
+// });
 
 // Cache for compiled templates
 const templateCache = {};
@@ -51,42 +97,75 @@ exports.onNewUserCreated = onDocumentCreated({
     
     console.log(`New regular user detected in Firestore: ${userId}, ${userEmail}`);
     
+    // Validate that we have an email to work with
+    if (!userEmail) {
+      console.error(`User ${userId} has no email address`);
+      await snapshot.ref.update({
+        emailCheckInProgress: false,
+        emailCheckCompletedAt: FieldValue.serverTimestamp(),
+        emailVerificationResult: {
+          status: 'invalid',
+          reason: 'No email address provided'
+        },
+        isEmailValid: false
+      });
+      return { success: false, error: 'No email address provided' };
+    }
+    
     // Mark the email as being checked
     await snapshot.ref.update({
       emailCheckInProgress: true,
-      emailCheckStartedAt: admin.firestore.FieldValue.serverTimestamp()
+      emailCheckStartedAt: FieldValue.serverTimestamp()
     });
     
-    // Check if the email is valid using Maileroo
+    /* 
+    // Email verification temporarily disabled
     const emailVerificationResult = await verifyEmailWithMaileroo(userEmail);
+    const status = emailVerificationResult.status || 'unknown';
+    */
+    
+    // Skip verification and assume email is valid
+    const emailVerificationResult = {
+      status: 'valid',
+      score: 100,
+      reason: 'Verification skipped',
+      validation_method: 'skipped'
+    };
+    const status = 'valid';
     
     // Update the user document with verification result
     await snapshot.ref.update({
       emailCheckInProgress: false,
-      emailCheckCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      emailCheckCompletedAt: FieldValue.serverTimestamp(),
       emailVerificationResult: emailVerificationResult,
-      isEmailValid: emailVerificationResult.status === 'valid'
+      isEmailValid: true // Always set to true since we're skipping verification
     });
     
-    // If email is valid, send welcome email
-    if (emailVerificationResult.status === 'valid') {
-      // Schedule welcome email to be sent immediately
-      await admin.firestore().collection('scheduledEmails').add({
-        userId: userId,
-        userType: 'regular',
-        scheduledFor: admin.firestore.FieldValue.serverTimestamp(),
-        emailType: 'welcome',
-        sent: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-    } else {
-      console.log(`Email ${userEmail} was found to be invalid or risky, not sending welcome email`);
+    // Send welcome email immediately instead of scheduling it
+    try {
+      await sendWelcomeEmail(userId, null, 'regular');
+      console.log(`Welcome email sent immediately to ${userEmail}`);
+    } catch (emailError) {
+      console.error(`Error sending welcome email to user ${userId}:`, emailError);
     }
     
-    return { success: true, emailStatus: emailVerificationResult.status };
+    return { success: true, emailStatus: status };
   } catch (error) {
     console.error('Error processing new user:', error);
-    return null;
+    
+    // Attempt to update the document to indicate failure
+    try {
+      await snapshot.ref.update({
+        emailCheckInProgress: false,
+        emailCheckCompletedAt: FieldValue.serverTimestamp(),
+        emailVerificationError: error.message,
+        isEmailValid: false
+      });
+    } catch (updateError) {
+      console.error('Failed to update user document after error:', updateError);
+    }
+    
+    return { success: false, error: error.message };
   }
 });
 
@@ -108,50 +187,85 @@ exports.onNewInfluencerCreated = onDocumentCreated({
     
     console.log(`New influencer detected in Firestore: ${influencerId}, ${influencerEmail}`);
     
+    // Validate that we have an email to work with
+    if (!influencerEmail) {
+      console.error(`Influencer ${influencerId} has no email address`);
+      await snapshot.ref.update({
+        emailCheckInProgress: false,
+        emailCheckCompletedAt: FieldValue.serverTimestamp(),
+        emailVerificationResult: {
+          status: 'invalid',
+          reason: 'No email address provided'
+        },
+        isEmailValid: false
+      });
+      return { success: false, error: 'No email address provided' };
+    }
+    
     // Mark the email as being checked
     await snapshot.ref.update({
       emailCheckInProgress: true,
-      emailCheckStartedAt: admin.firestore.FieldValue.serverTimestamp()
+      emailCheckStartedAt: FieldValue.serverTimestamp()
     });
     
-    // Check if the email is valid using Maileroo
+    /* 
+    // Email verification temporarily disabled
     const emailVerificationResult = await verifyEmailWithMaileroo(influencerEmail);
+    const status = emailVerificationResult.status || 'unknown';
+    */
+    
+    // Skip verification and assume email is valid
+    const emailVerificationResult = {
+      status: 'valid',
+      score: 100,
+      reason: 'Verification skipped',
+      validation_method: 'skipped'
+    };
+    const status = 'valid';
     
     // Update the influencer document with verification result
     await snapshot.ref.update({
       emailCheckInProgress: false,
-      emailCheckCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+      emailCheckCompletedAt: FieldValue.serverTimestamp(),
       emailVerificationResult: emailVerificationResult,
-      isEmailValid: emailVerificationResult.status === 'valid'
+      isEmailValid: true // Always set to true since we're skipping verification
     });
     
-    // If email is valid, send welcome email
-    if (emailVerificationResult.status === 'valid') {
-      // Schedule welcome email to be sent immediately
-      await admin.firestore().collection('scheduledEmails').add({
-        userId: influencerId,
-        userType: 'influencer',
-        scheduledFor: admin.firestore.FieldValue.serverTimestamp(),
-        emailType: 'welcome',
-        sent: false,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-    } else {
-      console.log(`Email ${influencerEmail} was found to be invalid or risky, not sending welcome email`);
+    // Send welcome email immediately instead of scheduling it
+    try {
+      await sendWelcomeEmail(influencerId, null, 'influencer');
+      console.log(`Welcome email sent immediately to influencer ${influencerEmail}`);
+    } catch (emailError) {
+      console.error(`Error sending welcome email to influencer ${influencerId}:`, emailError);
     }
     
-    return { success: true, emailStatus: emailVerificationResult.status };
+    return { success: true, emailStatus: status };
   } catch (error) {
     console.error('Error processing new influencer:', error);
-    return null;
+    
+    // Attempt to update the document to indicate failure
+    try {
+      await snapshot.ref.update({
+        emailCheckInProgress: false,
+        emailCheckCompletedAt: FieldValue.serverTimestamp(),
+        emailVerificationError: error.message,
+        isEmailValid: false
+      });
+    } catch (updateError) {
+      console.error('Failed to update influencer document after error:', updateError);
+    }
+    
+    return { success: false, error: error.message };
   }
 });
 
 /**
  * Check if an email address is valid using Maileroo's verification service
+ * Falls back to basic validation if API fails
  */
 async function verifyEmailWithMaileroo(emailAddress) {
   try {
+    // First try Maileroo API
     const response = await axios.post(
       `${MAILEROO_VERIFY_URL}/check`,
       {
@@ -167,63 +281,111 @@ async function verifyEmailWithMaileroo(emailAddress) {
     
     console.log(`Maileroo email verification response for ${emailAddress}:`, response.data);
     
-    return {
-      status: response.data.status, // 'valid', 'invalid', 'risky', etc.
-      score: response.data.score,   // Confidence score
-      reason: response.data.reason, // Reason for status
-      full_response: response.data  // Store full response for reference
-    };
+    // Check if response contains expected data structure
+    if (response.data && response.data.status) {
+      return {
+        status: response.data.status, // 'valid', 'invalid', 'risky', etc.
+        score: response.data.score || 0,
+        reason: response.data.reason || 'No reason provided',
+        full_response: response.data
+      };
+    } else {
+      console.log(`Maileroo API returned unexpected response format for ${emailAddress}, falling back to basic validation`);
+      // Fall back to basic validation
+      return performBasicEmailValidation(emailAddress);
+    }
   } catch (error) {
-    console.error(`Error verifying email ${emailAddress} with Maileroo:`, error);
+    console.error(`Error verifying email ${emailAddress} with Maileroo:`, error.message);
     
-    // Return a fallback result in case of API error
-    return {
-      status: 'unknown',
-      score: 0,
-      reason: 'API error',
-      error: error.message,
-      full_response: null
-    };
+    // Fall back to basic validation
+    console.log(`Falling back to basic email validation for ${emailAddress}`);
+    return performBasicEmailValidation(emailAddress);
   }
 }
 
 /**
- * Send email using Maileroo API with HTML content
+ * Performs basic email validation when Maileroo API is unavailable
  */
-async function sendMailerooEmail(toEmail, toName, subject, htmlContent, textContent) {
+function performBasicEmailValidation(emailAddress) {
+  // Simple regex for basic email format validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const isValidFormat = emailRegex.test(emailAddress);
+  
+  // Check for common disposable email domains (basic check)
+  const disposableDomains = [
+    'mailinator.com', 'yopmail.com', 'tempmail.com', 'guerrillamail.com',
+    'throwawaymail.com', '10minutemail.com', 'trashmail.com'
+  ];
+  
+  const emailDomain = emailAddress.split('@')[1].toLowerCase();
+  const isPotentiallyDisposable = disposableDomains.includes(emailDomain);
+  
+  let status = 'unknown';
+  let reason = 'Basic validation only';
+  
+  if (!isValidFormat) {
+    status = 'invalid';
+    reason = 'Invalid email format';
+  } else if (isPotentiallyDisposable) {
+    status = 'risky';
+    reason = 'Potentially disposable email domain';
+  } else {
+    status = 'valid';
+    reason = 'Passed basic validation';
+  }
+  
+  return {
+    status: status,
+    score: status === 'valid' ? 70 : 0, // Modest confidence score for basic validation
+    reason: reason,
+    validation_method: 'basic',
+    full_response: null
+  };
+}
+
+/**
+ * Send email using SMTP with Nodemailer
+ */
+async function sendEmail(toEmail, toName, subject, htmlContent, textContent) {
   try {
-    const form = new FormData();
-    
-    // Set required fields
-    form.append('from', `${MAILEROO_FROM_NAME} <${MAILEROO_FROM_EMAIL}>`);
-    form.append('to', `${toName} <${toEmail}>`);
-    form.append('subject', subject);
-    form.append('html', htmlContent);
-    
+    // Set up email options
+    const mailOptions = {
+      from: 'romeo@fb66ec3261d3c0b5.maileroo.org',
+      to: toEmail,
+      subject: subject,
+      html: htmlContent
+    };
+
+    // const mailOptions = {
+    //   from: "support@nextbudapp.com",
+    //   to: email,
+    //   subject: subject,
+    //   html: html,
+    // };
+
+    // Add text content if provided
     if (textContent) {
-      form.append('text', textContent);
+      mailOptions.text = textContent;
     }
     
-    // Send request to Maileroo
-    const response = await axios.post(`${MAILEROO_SMTP_URL}/send`, form, {
-      headers: {
-        ...form.getHeaders(),
-        'X-API-Key': MAILEROO_API_KEY
-      }
-    });
+    // Send email
+    const info = await transporter.sendMail(mailOptions);
     
-    console.log('Maileroo send response:', response.data);
-    return { success: true, messageId: response.data.id };
+    console.log('Email sent successfully:', info.messageId);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    console.error('Error sending email via Maileroo:', error.response ? error.response.data : error.message);
+    console.error('Error sending email via SMTP:', error);
     throw error;
   }
 }
 
 /**
  * Scheduled function that runs every 15 minutes to check for emails that need to be sent
+ * Now used for follow-up emails only
  */
-exports.sendScheduledEmails = async (context) => {
+exports.sendScheduledEmails = onCall({
+  region: 'us-central1'
+}, async (context) => {
   const now = admin.firestore.Timestamp.now();
   
   try {
@@ -246,13 +408,8 @@ exports.sendScheduledEmails = async (context) => {
     scheduledEmailsSnapshot.forEach(doc => {
       const scheduledEmail = doc.data();
       
-      if (scheduledEmail.emailType === 'welcome') {
-        emailPromises.push(sendWelcomeEmail(
-          scheduledEmail.userId, 
-          doc.id,
-          scheduledEmail.userType || 'regular'
-        ));
-      } else if (scheduledEmail.emailType === 'followUp') {
+      // Only process follow-up emails now, welcome emails are sent immediately
+      if (scheduledEmail.emailType === 'followUp') {
         emailPromises.push(sendFollowUpEmail(
           scheduledEmail.userId, 
           doc.id,
@@ -268,10 +425,11 @@ exports.sendScheduledEmails = async (context) => {
     console.error('Error sending scheduled emails:', error);
     return { success: false, error: error.message };
   }
-};
+});
 
 /**
- * Send welcome email after email verification check
+ * Send welcome email immediately after email verification check
+ * Modified to work with or without a scheduledEmailId
  */
 async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
   try {
@@ -297,17 +455,17 @@ async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
     
     // Set email subject based on user type
     const subject = userType === 'influencer'
-      ? 'Welcome to YourApp Creator Program!'
-      : 'Welcome to YourApp!';
+      ? 'Welcome to NextBud Creator!'
+      : 'Welcome to NextBud!';
       
     // Prepare template variables
     const templateData = {
       firstName: userName.split(' ')[0] || userName,
       fullName: userName,
-      appUrl: 'https://yourapp.com',
-      profileUrl: `https://yourapp.com/${userType === 'influencer' ? 'creator' : 'user'}/profile`,
-      dashboardUrl: `https://yourapp.com/${userType === 'influencer' ? 'creator-dashboard' : 'dashboard'}`,
-      analyticsUrl: `https://yourapp.com/analytics`,
+      appUrl: 'https://nextbudapp.com',
+      profileUrl: `https://nextbudapp.com/${userType === 'influencer' ? 'creator' : 'user'}/profile`,
+      dashboardUrl: `https://nextbudapp.com/${userType === 'influencer' ? 'creator-dashboard' : 'dashboard'}`,
+      analyticsUrl: `https://nextbudapp.com/analytics`,
       userType: userType === 'influencer' ? 'Creator' : 'User',
       currentYear: new Date().getFullYear(),
       email: userEmail
@@ -320,21 +478,23 @@ async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
     // Render the template
     const htmlContent = template(templateData);
     
-    // Send email via Maileroo
-    await sendMailerooEmail(userEmail, userName, subject, htmlContent);
+    // Send email via SMTP
+    await sendEmail(userEmail, userName, subject, htmlContent);
     
-    console.log(`Welcome email sent to ${userEmail} (${userType}) via Maileroo`);
+    console.log(`Welcome email sent to ${userEmail} (${userType}) via SMTP`);
     
-    // Mark the scheduled email as sent
-    await admin.firestore().collection('scheduledEmails').doc(scheduledEmailId).update({
-      sent: true,
-      sentAt: admin.firestore.FieldValue.serverTimestamp()
-    });
+    // If this was from a scheduled email, mark it as sent
+    if (scheduledEmailId) {
+      await admin.firestore().collection('scheduledEmails').doc(scheduledEmailId).update({
+        sent: true,
+        sentAt: FieldValue.serverTimestamp()
+      });
+    }
     
     // Update user record
     await admin.firestore().collection(collectionName).doc(userId).update({
       welcomeEmailSent: true,
-      welcomeEmailSentAt: admin.firestore.FieldValue.serverTimestamp()
+      welcomeEmailSentAt: FieldValue.serverTimestamp()
     });
     
     // Schedule follow-up email
@@ -358,10 +518,10 @@ async function scheduleFollowUpEmail(userId, daysDelay, userType) {
   await admin.firestore().collection('scheduledEmails').add({
     userId: userId,
     userType: userType,
-    scheduledFor: admin.firestore.Timestamp.fromDate(followUpDate),
+    scheduledFor: new Date(followUpDate),
     emailType: 'followUp',
     sent: false,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
+    createdAt: FieldValue.serverTimestamp()
   });
   
   console.log(`Follow-up email scheduled for ${userType} ${userId} in ${daysDelay} days`);
@@ -395,8 +555,8 @@ async function sendFollowUpEmail(userId, scheduledEmailId, userType) {
     
     // Set email subject based on user type
     const subject = userType === 'influencer'
-      ? 'Maximize Your Reach on YourApp'
-      : 'How are you enjoying YourApp?';
+      ? 'Maximize Your Reach on Nextbud'
+      : 'How are you enjoying Nextbud?';
       
     // Calculate days since signup
     const daysSinceSignup = userType === 'influencer' ? 3 : 7;
@@ -405,11 +565,11 @@ async function sendFollowUpEmail(userId, scheduledEmailId, userType) {
     const templateData = {
       firstName: userName.split(' ')[0] || userName,
       fullName: userName,
-      appUrl: 'https://yourapp.com',
-      discoverUrl: 'https://yourapp.com/discover',
-      eventsUrl: 'https://yourapp.com/events',
-      createUrl: 'https://yourapp.com/create',
-      analyticsUrl: 'https://yourapp.com/analytics',
+      appUrl: 'https://nextbudapp.com',
+      discoverUrl: 'https://nextbudapp.com/discover',
+      eventsUrl: 'https://nextbudapp.com/events',
+      createUrl: 'https://nextbudapp.com/create',
+      analyticsUrl: 'https://nextbudapp.com/analytics',
       daysSinceSignup: daysSinceSignup,
       userType: userType === 'influencer' ? 'Creator' : 'User',
       currentYear: new Date().getFullYear(),
@@ -423,21 +583,21 @@ async function sendFollowUpEmail(userId, scheduledEmailId, userType) {
     // Render the template
     const htmlContent = template(templateData);
     
-    // Send email via Maileroo
-    await sendMailerooEmail(userEmail, userName, subject, htmlContent);
+    // Send email via SMTP
+    await sendEmail(userEmail, userName, subject, htmlContent);
     
-    console.log(`Follow-up email sent to ${userEmail} (${userType}) via Maileroo`);
+    console.log(`Follow-up email sent to ${userEmail} (${userType}) via SMTP`);
     
     // Mark the scheduled email as sent
     await admin.firestore().collection('scheduledEmails').doc(scheduledEmailId).update({
       sent: true,
-      sentAt: admin.firestore.FieldValue.serverTimestamp()
+      sentAt: FieldValue.serverTimestamp()
     });
     
     // Update user record
     await admin.firestore().collection(collectionName).doc(userId).update({
       followUpEmailSent: true,
-      followUpEmailSentAt: admin.firestore.FieldValue.serverTimestamp()
+      followUpEmailSentAt: FieldValue.serverTimestamp()
     });
     
     return true;
@@ -449,6 +609,7 @@ async function sendFollowUpEmail(userId, scheduledEmailId, userType) {
 
 /**
  * Manual function to check an email's validity (admin only)
+ * This function is currently disabled
  */
 exports.checkEmailValidity = onCall({
   region: 'us-central1'
@@ -470,63 +631,55 @@ exports.checkEmailValidity = onCall({
   }
   
   try {
-    const result = await verifyEmailWithMaileroo(email);
-    return { success: true, result };
+    // Email verification is disabled, return a dummy result
+    return { 
+      success: true, 
+      result: {
+        status: 'valid',
+        score: 100,
+        reason: 'Verification skipped',
+        validation_method: 'skipped'
+      }
+    };
+    
+    // Original code:
+    // const result = await verifyEmailWithMaileroo(email);
+    // return { success: true, result };
   } catch (error) {
     throw new Error(`internal: ${error.message}`);
   }
 });
 
 /**
- * Manual function to test sending an email (admin only)
+ * Verify SMTP connection
  */
-exports.testEmail = onCall({
+exports.verifySmtpConnection = onCall({
   region: 'us-central1'
 }, async (request) => {
   // Security check
-  const {data, auth} = request;
+  const {auth} = request;
   if (!auth || !auth.token.admin) {
     throw new Error(
-      'permission-denied: Only admins can test emails'
-    );
-  }
-  
-  const { email, name, templateName, subject, templateData } = data;
-  
-  if (!email || !templateName) {
-    throw new Error(
-      'invalid-argument: Email and templateName are required'
+      'permission-denied: Only admins can verify SMTP connection'
     );
   }
   
   try {
-    // Get the template
-    const template = getTemplate(templateName);
-    
-    // Render the template with provided data or default data
-    const htmlContent = template(templateData || {
-      firstName: name || 'Test',
-      fullName: name || 'Test User',
-      appUrl: 'https://yourapp.com',
-      profileUrl: 'https://yourapp.com/user/profile',
-      dashboardUrl: 'https://yourapp.com/dashboard',
-      analyticsUrl: 'https://yourapp.com/analytics',
-      currentYear: new Date().getFullYear(),
-      email: email
-    });
-    
-    // Send email
-    const result = await sendMailerooEmail(
-      email,
-      name || 'Test User',
-      subject || 'Test Email from YourApp',
-      htmlContent
-    );
-    
-    return { success: true, result };
+    // Verify SMTP connection
+    await transporter.verify();
+    return { success: true, message: 'SMTP connection verified successfully' };
   } catch (error) {
-    throw new Error(`internal: ${error.message}`);
+    console.error('SMTP verification error:', error);
+    return { 
+      success: false, 
+      error: error.message,
+      details: {
+        code: error.code,
+        command: error.command
+      }
+    };
   }
 });
 
+// Export functions
 module.exports = exports;
