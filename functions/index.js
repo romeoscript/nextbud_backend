@@ -63,12 +63,26 @@ exports.checkExpiredSubscriptionsScheduled = onSchedule({
 // Export email-related functions
 exports.onNewUserCreated = emailServices.onNewUserCreated;
 exports.onNewInfluencerCreated = emailServices.onNewInfluencerCreated;
+// exports.sendScheduledEmails = onSchedule({
+//   schedule: "every 15 minutes",
+//   timeoutSeconds: 120,
+//   memory: "256MiB",
+//   retryCount: 2,
+//   region: "us-central1",
+// }, emailServices.sendScheduledEmails);
+
 exports.sendScheduledEmails = onSchedule({
-  schedule: "every 15 minutes",
+  schedule: "every 2 minutes",
   timeoutSeconds: 120,
   memory: "256MiB",
   retryCount: 2,
   region: "us-central1",
 }, emailServices.sendScheduledEmails);
+
+
+
 exports.checkEmailValidity = emailServices.checkEmailValidity;
+
+
+
 // exports.testMailerooTemplate = emailServices.testMailerooTemplate;

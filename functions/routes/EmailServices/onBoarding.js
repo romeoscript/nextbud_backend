@@ -3,18 +3,17 @@ const {onCall} = require('firebase-functions/v2/https');
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const axios = require('axios');
-const { FieldValue } = require('firebase-admin/firestore');
+const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
 const nodemailer = require('nodemailer');
 
+
 // Initialize Firebase Admin if not already done
 if (!admin.apps.length) {
   admin.initializeApp();
 }
-
-
 
 // Maileroo API configuration (for email verification only)
 const MAILEROO_API_KEY = functions.config().maileroo?.api_key || '';
@@ -23,42 +22,23 @@ const MAILEROO_FROM_EMAIL = functions.config().maileroo?.from_email || '';
 const MAILEROO_FROM_NAME = functions.config().maileroo?.from_name || '';
 
 // SMTP Configuration
-// const SMTP_HOST = functions.config().smtp?.host || 'smtp.maileroo.com';
-// const SMTP_PORT = parseInt(functions.config().smtp?.port || '465');
-// const SMTP_SECURE = functions.config().smtp?.secure === 'true';
-// const SMTP_USER = functions.config().smtp?.user || '';
-// const SMTP_PASS = functions.config().smtp?.pass || '';
-// const EMAIL_FROM = functions.config().email?.from || MAILEROO_FROM_EMAIL;
-// const EMAIL_FROM_NAME = functions.config().email?.from_name || MAILEROO_FROM_NAME;
-
 const SMTP_HOST = 'smtp.maileroo.com';
 const SMTP_PORT = '465';
 const SMTP_SECURE = 'true';
 const SMTP_USER = 'romeo@fb66ec3261d3c0b5.maileroo.org';
 const SMTP_PASS = 'ab36b81d5adef147303ecbb0';
-// const EMAIL_FROM = '60ca95.7200.2a13f46f21d8abda62fed529fcef2937@g.maileroo.net';
 const EMAIL_FROM_NAME = 'nextbud';
 
 // Create SMTP transporter
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: 587,
- secure: false, 
+  secure: false, 
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
 });
-
-
-// const transporter = nodemailer.createTransport({
-//   host: "smtp-relay.brevo.com",
-//   port: 587,
-//   auth: {
-//     user: "7732de001@smtp-brevo.com",
-//     pass: "vbsxdyZXEn0GzmS3",
-//   },
-// });
 
 // Cache for compiled templates
 const templateCache = {};
@@ -336,7 +316,7 @@ function performBasicEmailValidation(emailAddress) {
   
   return {
     status: status,
-    score: status === 'valid' ? 70 : 0, // Modest confidence score for basic validation
+    score: status === 'valid' ? 70 : 0, 
     reason: reason,
     validation_method: 'basic',
     full_response: null
@@ -350,18 +330,11 @@ async function sendEmail(toEmail, toName, subject, htmlContent, textContent) {
   try {
     // Set up email options
     const mailOptions = {
-      from: 'romeo@fb66ec3261d3c0b5.maileroo.org',
+      from: '"Nextbud" <romeo@fb66ec3261d3c0b5.maileroo.org>',
       to: toEmail,
       subject: subject,
       html: htmlContent
     };
-
-    // const mailOptions = {
-    //   from: "support@nextbudapp.com",
-    //   to: email,
-    //   subject: subject,
-    //   html: html,
-    // };
 
     // Add text content if provided
     if (textContent) {
@@ -382,13 +355,15 @@ async function sendEmail(toEmail, toName, subject, htmlContent, textContent) {
 /**
  * Scheduled function that runs every 15 minutes to check for emails that need to be sent
  * Now used for follow-up emails only
+ * 
+ * This version is compatible with onSchedule
  */
-exports.sendScheduledEmails = onCall({
-  region: 'us-central1'
-}, async (context) => {
-  const now = admin.firestore.Timestamp.now();
+exports.sendScheduledEmails = async (event) => {
+  const now = Timestamp.now();
   
   try {
+    console.log(`Checking for scheduled emails at ${now.toDate()}`);
+    
     // Get all scheduled emails that are due to be sent
     const scheduledEmailsSnapshot = await admin.firestore()
       .collection('scheduledEmails')
@@ -398,7 +373,7 @@ exports.sendScheduledEmails = onCall({
     
     if (scheduledEmailsSnapshot.empty) {
       console.log('No scheduled emails to send at this time');
-      return null;
+      return { success: true, emailsSent: 0 };
     }
     
     console.log(`Found ${scheduledEmailsSnapshot.size} scheduled emails to send`);
@@ -407,8 +382,9 @@ exports.sendScheduledEmails = onCall({
     
     scheduledEmailsSnapshot.forEach(doc => {
       const scheduledEmail = doc.data();
+      console.log(`Processing scheduled email: ${doc.id}, type: ${scheduledEmail.emailType}, scheduled for: ${scheduledEmail.scheduledFor.toDate()}`);
       
-      // Only process follow-up emails now, welcome emails are sent immediately
+      // Process all email types
       if (scheduledEmail.emailType === 'followUp') {
         emailPromises.push(sendFollowUpEmail(
           scheduledEmail.userId, 
@@ -418,14 +394,17 @@ exports.sendScheduledEmails = onCall({
       }
     });
     
-    await Promise.all(emailPromises);
+    const results = await Promise.all(emailPromises);
+    const sentCount = results.filter(result => result === true).length;
     
-    return { success: true, emailsSent: emailPromises.length };
+    console.log(`Successfully sent ${sentCount} out of ${emailPromises.length} scheduled emails`);
+    
+    return { success: true, emailsSent: sentCount };
   } catch (error) {
     console.error('Error sending scheduled emails:', error);
     return { success: false, error: error.message };
   }
-});
+};
 
 /**
  * Send welcome email immediately after email verification check
@@ -498,8 +477,9 @@ async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
     });
     
     // Schedule follow-up email
-    const followUpDays = userType === 'influencer' ? 3 : 7;
-    await scheduleFollowUpEmail(userId, followUpDays, userType);
+    // Use 2 minutes delay for testing instead of days
+    const followUpMinutes = 2; // 2 minutes delay for testing
+    await scheduleFollowUpEmail(userId, followUpMinutes, userType, true);
     
     return true;
   } catch (error) {
@@ -511,9 +491,17 @@ async function sendWelcomeEmail(userId, scheduledEmailId, userType) {
 /**
  * Schedule a follow-up email
  */
-async function scheduleFollowUpEmail(userId, daysDelay, userType) {
+async function scheduleFollowUpEmail(userId, timeDelay, userType, isMinutes = false) {
   const followUpDate = new Date();
-  followUpDate.setDate(followUpDate.getDate() + daysDelay);
+  
+  if (isMinutes) {
+    // Add minutes for testing
+    followUpDate.setMinutes(followUpDate.getMinutes() + timeDelay);
+    console.log(`Setting follow-up for ${timeDelay} minutes from now: ${followUpDate}`);
+  } else {
+    // Normal behavior - add days
+    followUpDate.setDate(followUpDate.getDate() + timeDelay);
+  }
   
   await admin.firestore().collection('scheduledEmails').add({
     userId: userId,
@@ -524,7 +512,8 @@ async function scheduleFollowUpEmail(userId, daysDelay, userType) {
     createdAt: FieldValue.serverTimestamp()
   });
   
-  console.log(`Follow-up email scheduled for ${userType} ${userId} in ${daysDelay} days`);
+  const timeUnit = isMinutes ? 'minutes' : 'days';
+  console.log(`Follow-up email scheduled for ${userType} ${userId} in ${timeDelay} ${timeUnit}`);
   return true;
 }
 
@@ -660,7 +649,7 @@ exports.verifySmtpConnection = onCall({
   const {auth} = request;
   if (!auth || !auth.token.admin) {
     throw new Error(
-      'permission-denied: Only admins can verify SMTP connection'
+      'permission-denied: Only admins can manually check email validity'
     );
   }
   
