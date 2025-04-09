@@ -25,6 +25,7 @@ const partnerRoutes = require("./routes/partners");
 const referralRoutes = require("./routes/Referral");
 
 const emailServices = require("./routes/EmailServices/onBoarding");
+const connections = require('./routes/EmailServices/Connections');
 
 // Use routes
 app.use("/admin", adminRoutes);
@@ -63,6 +64,10 @@ exports.checkExpiredSubscriptionsScheduled = onSchedule({
 // Export email-related functions
 exports.onNewUserCreated = emailServices.onNewUserCreated;
 exports.onNewInfluencerCreated = emailServices.onNewInfluencerCreated;
+
+exports.onNewConnectionRequest = connections.onNewConnectionRequest;
+exports.onConnectionStatusChanged = connections.onConnectionStatusChanged;
+
 // exports.sendScheduledEmails = onSchedule({
 //   schedule: "every 15 minutes",
 //   timeoutSeconds: 120,

@@ -1,0 +1,124 @@
+{{!-- connection-request.hbs --}}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Connection Request on NextBud</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eeeeee;
+    }
+    .logo {
+      margin-bottom: 20px;
+      max-width: 150px;
+    }
+    .profile-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 0 auto 15px;
+      display: block;
+      border: 3px solid #5d3fd3;
+    }
+    h1 {
+      color: #5d3fd3;
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .content {
+      padding: 30px 20px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #5d3fd3;
+      color: white !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      margin: 20px 0;
+      font-weight: bold;
+      text-align: center;
+    }
+    .button:hover {
+      background-color: #4b32a8;
+    }
+    .footer {
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      padding-top: 20px;
+      border-top: 1px solid #eeeeee;
+    }
+    .social-links {
+      margin: 15px 0;
+    }
+    .social-link {
+      display: inline-block;
+      margin: 0 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="https://nextbudapp.com/images/logo.png" alt="NextBud" class="logo">
+      <h1>New Connection Request</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hi {{receiverName}},</p>
+      
+      {{#if requesterImageUrl}}
+      <img src="{{requesterImageUrl}}" alt="{{requesterName}}'s profile image" class="profile-image">
+      {{/if}}
+      
+      <p><strong>{{requesterName}}</strong> wants to connect with you on NextBud!</p>
+      
+      {{#if requesterUsername}}
+      <p>Username: <strong>@{{requesterUsername}}</strong></p>
+      {{/if}}
+      
+      <p>Connection requests allow you to build your network and discover new opportunities on NextBud. Once you accept, you'll be able to chat and collaborate together.</p>
+      
+      <p style="text-align: center;">
+        <a href="{{connectionsUrl}}" class="button">View Connection Request</a>
+      </p>
+      
+      <p>You can also view their profile by <a href="{{profileUrl}}">clicking here</a>.</p>
+      
+      <p>If you don't recognize this person, you can safely ignore or decline this request.</p>
+    </div>
+    
+    <div class="footer">
+      <div class="social-links">
+        <a href="https://instagram.com/nextbud" class="social-link">Instagram</a> |
+        <a href="https://twitter.com/nextbud" class="social-link">Twitter</a> |
+        <a href="https://facebook.com/nextbud" class="social-link">Facebook</a>
+      </div>
+      <p>© {{currentYear}} NextBud. All rights reserved.</p>
+      <p>You're receiving this email because you have an account on NextBud.</p>
+    </div>
+  </div>
+</body>
+</html>
+

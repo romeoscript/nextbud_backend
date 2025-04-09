@@ -1,0 +1,142 @@
+{{!-- connection-accepted.hbs --}}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Connection Request was Accepted</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #eeeeee;
+    }
+    .logo {
+      margin-bottom: 20px;
+      max-width: 150px;
+    }
+    .profile-image {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 0 auto 15px;
+      display: block;
+      border: 3px solid #5d3fd3;
+    }
+    h1 {
+      color: #5d3fd3;
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .content {
+      padding: 30px 20px;
+    }
+    .button {
+      display: inline-block;
+      background-color: #5d3fd3;
+      color: white !important;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      margin: 20px 0;
+      font-weight: bold;
+      text-align: center;
+    }
+    .button:hover {
+      background-color: #4b32a8;
+    }
+    .secondary-button {
+      display: inline-block;
+      background-color: #f2f2f2;
+      color: #333 !important;
+      text-decoration: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      text-align: center;
+    }
+    .secondary-button:hover {
+      background-color: #e6e6e6;
+    }
+    .footer {
+      text-align: center;
+      color: #888;
+      font-size: 12px;
+      padding-top: 20px;
+      border-top: 1px solid #eeeeee;
+    }
+    .social-links {
+      margin: 15px 0;
+    }
+    .social-link {
+      display: inline-block;
+      margin: 0 5px;
+    }
+    .action-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="https://nextbudapp.com/images/logo.png" alt="NextBud" class="logo">
+      <h1>Connection Accepted</h1>
+    </div>
+    
+    <div class="content">
+      <p>Hi {{requesterName}},</p>
+      
+      {{#if receiverImageUrl}}
+      <img src="{{receiverImageUrl}}" alt="{{receiverName}}'s profile image" class="profile-image">
+      {{/if}}
+      
+      <p>Great news! <strong>{{receiverName}}</strong> has accepted your connection request on NextBud.</p>
+      
+      {{#if receiverUsername}}
+      <p>Username: <strong>@{{receiverUsername}}</strong></p>
+      {{/if}}
+      
+      <p>You're now connected! This means you can chat, collaborate, and explore opportunities together on the platform.</p>
+      
+      <div class="action-buttons">
+        <a href="{{chatUrl}}" class="button">Start a Conversation</a>
+        <a href="{{profileUrl}}" class="secondary-button">View Profile</a>
+      </div>
+      
+      <p>Building your network on NextBud is a great way to discover new opportunities and collaborations. Keep connecting with more people to expand your reach!</p>
+    </div>
+    
+    <div class="footer">
+      <div class="social-links">
+        <a href="https://instagram.com/nextbud" class="social-link">Instagram</a> |
+        <a href="https://twitter.com/nextbud" class="social-link">Twitter</a> |
+        <a href="https://facebook.com/nextbud" class="social-link">Facebook</a>
+      </div>
+      <p>© {{currentYear}} NextBud. All rights reserved.</p>
+      <p>You're receiving this email because you have an account on NextBud.</p>
+    </div>
+  </div>
+</body>
+</html>
