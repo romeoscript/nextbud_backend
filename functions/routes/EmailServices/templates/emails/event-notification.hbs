@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Event on NextBud</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      margin: 0;
+      padding: 0;
+      background-color: #f9f9f9;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header {
+      text-align: center;
+      padding: 15px 0;
+      border-bottom: 1px solid #eee;
+    }
+    .header h1 {
+      color: #4a154b;
+      margin: 0;
+      font-size: 24px;
+    }
+    .logo {
+      width: 120px;
+      height: auto;
+      margin-bottom: 15px;
+    }
+    .greeting {
+      font-size: 18px;
+      margin: 15px 0;
+    }
+    .event-card {
+      border: 1px solid #eaeaea;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 20px 0;
+      background-color: #fff;
+    }
+    .event-image-container {
+      height: 200px;
+      overflow: hidden;
+      background-color: #f3f3f3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .event-image {
+      width: 100%;
+      object-fit: cover;
+    }
+    .no-image {
+      color: #999;
+      font-style: italic;
+      padding: 80px 0;
+      text-align: center;
+    }
+    .event-details {
+      padding: 20px;
+    }
+    .event-title {
+      font-size: 22px;
+      font-weight: bold;
+      color: #4a154b;
+      margin-bottom: 15px;
+    }
+    .event-meta {
+      display: flex;
+      flex-wrap: wrap;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 15px;
+    }
+    .event-info {
+      margin-bottom: 10px;
+      width: 50%;
+      box-sizing: border-box;
+      display: flex;
+      align-items: flex-start;
+    }
+    .event-info-icon {
+      margin-right: 8px;
+      color: #4a154b;
+      font-size: 16px;
+      min-width: 16px;
+      text-align: center;
+    }
+    .event-info-text {
+      font-size: 14px;
+    }
+    .event-info-label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 2px;
+    }
+    .event-description {
+      margin: 15px 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #555;
+    }
+    .rsvp-section {
+      background-color: #f7f5fc;
+      padding: 15px;
+      border-radius: 6px;
+      margin: 15px 0;
+      text-align: center;
+    }
+    .rsvp-count {
+      font-size: 16px;
+      margin-bottom: 15px;
+    }
+    .cta-button {
+      display: inline-block;
+      background-color: #4a154b;
+      color: white;
+      padding: 12px 24px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 16px;
+      transition: background-color 0.3s;
+    }
+    .cta-button:hover {
+      background-color: #61236a;
+    }
+    .message {
+      margin: 20px 0;
+      font-size: 16px;
+      text-align: center;
+    }
+    .footer {
+      text-align: center;
+      font-size: 12px;
+      color: #777;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+    .footer a {
+      color: #4a154b;
+      text-decoration: none;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    
+    @media only screen and (max-width: 480px) {
+      .event-info {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <img src="https://nextbudapp.com/logo.png" alt="NextBud Logo" class="logo">
+      <h1>New Event Alert!</h1>
+    </div>
+    
+    <p class="greeting">Hey {{userName}},</p>
+    <p>There's a new event {{#if eventLocation}}{{#if eventCity}}in {{eventCity}}{{else}}{{#if eventCountry}}in {{eventCountry}}{{/if}}{{/if}}{{/if}} that might interest you!</p>
+    
+    <div class="event-card">
+      <div class="event-image-container">
+        {{#if eventImageUrl}}
+          <img src="{{eventImageUrl}}" alt="{{eventTitle}}" class="event-image">
+        {{else}}
+          <div class="no-image">No image available</div>
+        {{/if}}
+      </div>
+      
+      <div class="event-details">
+        <div class="event-title">{{eventTitle}}</div>
+        
+        <div class="event-meta">
+          <div class="event-info">
+            <div class="event-info-icon">📅</div>
+            <div class="event-info-text">
+              <span class="event-info-label">Date</span>
+              {{eventDate}}
+            </div>
+          </div>
+          
+          <div class="event-info">
+            <div class="event-info-icon">⏰</div>
+            <div class="event-info-text">
+              <span class="event-info-label">Time</span>
+              {{eventTime}}
+            </div>
+          </div>
+          
+          <div class="event-info">
+            <div class="event-info-icon">📍</div>
+            <div class="event-info-text">
+              <span class="event-info-label">Location</span>
+              {{eventLocation}}
+              {{#if eventCity}} - {{eventCity}}{{/if}}
+              {{#if eventCountry}}, {{eventCountry}}{{/if}}
+            </div>
+          </div>
+          
+          <div class="event-info">
+            <div class="event-info-icon">👤</div>
+            <div class="event-info-text">
+              <span class="event-info-label">Host</span>
+              {{posterName}}
+            </div>
+          </div>
+        </div>
+        
+        <div class="event-description">
+          {{eventDescription}}
+        </div>
+        
+        <div class="rsvp-section">
+          <div class="rsvp-count">
+            <strong>{{rsvpCount}}</strong> people have already RSVP'd to this event
+          </div>
+          <a href="{{eventPageUrl}}" class="cta-button">View Event & RSVP</a>
+        </div>
+      </div>
+    </div>
+    
+    <p class="message">Don't miss out on this opportunity to connect with fellow NextBud users!</p>
+    
+    <div class="footer">
+      <p>&copy; {{currentYear}} NextBud. All rights reserved.</p>
+      <p>
+        <a href="{{appUrl}}">Visit NextBud</a> &nbsp;|&nbsp; 
+        <a href="{{appUrl}}/settings/notifications">Manage Email Preferences</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

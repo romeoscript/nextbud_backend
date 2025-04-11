@@ -26,6 +26,7 @@ const referralRoutes = require("./routes/Referral");
 
 const emailServices = require("./routes/EmailServices/onBoarding");
 const connections = require('./routes/EmailServices/Connections');
+const events = require('./routes/EmailServices/Events'); 
 
 // Use routes
 app.use("/admin", adminRoutes);
@@ -64,9 +65,10 @@ exports.checkExpiredSubscriptionsScheduled = onSchedule({
 // Export email-related functions
 exports.onNewUserCreated = emailServices.onNewUserCreated;
 exports.onNewInfluencerCreated = emailServices.onNewInfluencerCreated;
-
 exports.onNewConnectionRequest = connections.onNewConnectionRequest;
 exports.onConnectionStatusChanged = connections.onConnectionStatusChanged;
+exports.onNewEventCreated = events.onNewEventCreated;
+exports.createEventNotificationTemplate = events.createEventNotificationTemplate;
 
 // exports.sendScheduledEmails = onSchedule({
 //   schedule: "every 15 minutes",
