@@ -25,8 +25,8 @@ const partnerRoutes = require("./routes/partners");
 const referralRoutes = require("./routes/Referral");
 
 const emailServices = require("./routes/EmailServices/onBoarding");
-const connections = require('./routes/EmailServices/Connections');
-const events = require('./routes/EmailServices/Events'); 
+const connections = require("./routes/EmailServices/Connections");
+const events = require("./routes/EmailServices/Events");
 
 // Use routes
 app.use("/admin", adminRoutes);
