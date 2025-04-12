@@ -1,14 +1,14 @@
 {
   "smtp": {
-    "user": "romeo@fb66ec3261d3c0b5.maileroo.org",
+    "user": "info@nextbudapp.com",
     "host": "smtp.maileroo.com",
     "secure": "true",
-    "pass": "ab36b81d5adef147303ecbb0",
+    "pass": "0a0b507d87ec5b66ba9e9c06",
     "port": "465"
   },
   "email": {
     "from_name": "nextbud",
-    "from": "romeo@fb66ec3261d3c0b5.maileroo.org"
+    "from": "info@nextbudapp.com"
   },
   "maileroo": {
     "api_key": "4bbc0c32ec23484021e577527048f912c598d20e18bc5b45cdd5a3fc311db9ff",

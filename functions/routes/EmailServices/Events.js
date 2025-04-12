@@ -14,8 +14,8 @@ if (!admin.apps.length) {
 
 // SMTP Configuration (reusing your existing configuration)
 const SMTP_HOST = 'smtp.maileroo.com';
-const SMTP_USER = 'romeo@fb66ec3261d3c0b5.maileroo.org';
-const SMTP_PASS = 'ab36b81d5adef147303ecbb0';
+const SMTP_USER = 'info@nextbudapp.com';
+const SMTP_PASS = '0a0b507d87ec5b66ba9e9c06';
 const EMAIL_FROM_NAME = 'nextbud';
 
 // Create SMTP transporter

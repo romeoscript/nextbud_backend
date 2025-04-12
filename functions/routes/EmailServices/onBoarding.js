@@ -21,8 +21,8 @@ if (!admin.apps.length) {
 
 // SMTP Configuration
 const SMTP_HOST = 'smtp.maileroo.com';
-const SMTP_USER = 'romeo@fb66ec3261d3c0b5.maileroo.org';
-const SMTP_PASS = 'ab36b81d5adef147303ecbb0';
+const SMTP_USER = 'info@nextbudapp.com';
+const SMTP_PASS = '0a0b507d87ec5b66ba9e9c06';
 const EMAIL_FROM_NAME = 'nextbud';
 
 // Create SMTP transporter
@@ -242,7 +242,7 @@ async function sendEmail(toEmail, toName, subject, htmlContent, textContent) {
   try {
     // Set up email options
     const mailOptions = {
-      from: '"Nextbud" <romeo@fb66ec3261d3c0b5.maileroo.org>',
+      from: '"Nextbud" <info@nextbudapp.com>',
       to: toEmail,
       subject: subject,
       html: htmlContent
