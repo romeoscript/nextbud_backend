@@ -23,13 +23,16 @@ app.use(express.urlencoded({extended: true}));
 const adminRoutes = require("./routes/admin");
 const partnerRoutes = require("./routes/partners");
 const referralRoutes = require("./routes/Referral");
+const userRoutes = require("./routes/findbody");
 
 const emailServices = require("./routes/EmailServices/onBoarding");
 const connections = require("./routes/EmailServices/Connections");
 const events = require("./routes/EmailServices/Events");
 
+
 // Use routes
 app.use("/admin", adminRoutes);
+app.use("/users", userRoutes); 
 app.use("/partners", partnerRoutes);
 app.use("/referrals", referralRoutes);
 
@@ -51,7 +54,7 @@ exports.checkPendingActivationsScheduled = onSchedule({
   timeoutSeconds: 300,
   memory: "512MiB",
   retryCount: 3,
-  region: "us-central1", // Specify your preferred region
+  region: "us-central1", 
 }, checkPendingActivations);
 
 exports.checkExpiredSubscriptionsScheduled = onSchedule({
