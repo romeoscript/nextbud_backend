@@ -32,7 +32,7 @@ const events = require("./routes/EmailServices/Events");
 
 // Use routes
 app.use("/admin", adminRoutes);
-app.use("/users", userRoutes); 
+app.use("/users", userRoutes);
 app.use("/partners", partnerRoutes);
 app.use("/referrals", referralRoutes);
 
@@ -54,7 +54,7 @@ exports.checkPendingActivationsScheduled = onSchedule({
   timeoutSeconds: 300,
   memory: "512MiB",
   retryCount: 3,
-  region: "us-central1", 
+  region: "us-central1",
 }, checkPendingActivations);
 
 exports.checkExpiredSubscriptionsScheduled = onSchedule({
